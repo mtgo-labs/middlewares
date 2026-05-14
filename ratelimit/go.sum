@@ -1,0 +1,4 @@
+github.com/mtgo-labs/mtgo v0.1.0 h1:PQIUTAy7brJDyezjzEy9cBA+YcHFA5tQhD5SckZisaM=
+github.com/mtgo-labs/mtgo v0.1.0/go.mod h1:6yhhHVjBH6M6lKvHAoAIK1fSKBf0wZjsspv0jePpOnY=
+golang.org/x/time v0.15.0 h1:bbrp8t3bGUeFOx08pvsMYRTCVSMk89u4tKbNOZbp88U=
+golang.org/x/time v0.15.0/go.mod h1:Y4YMaQmXwGQZoFaVFk4YpCt4FLQMYKZe9oeV/f4MSno=
