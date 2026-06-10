@@ -12,7 +12,6 @@ package ratelimit
 
 import (
 	"context"
-	"io"
 
 	"golang.org/x/time/rate"
 	"github.com/mtgo-labs/mtgo/tg"
@@ -46,7 +45,7 @@ func (m *Middleware) Limiter() *rate.Limiter {
 // Middleware returns a tg.InvokerMiddleware function for UseInvokerMiddleware.
 func (m *Middleware) Middleware() func(next tg.Invoker) tg.Invoker {
 	return func(next tg.Invoker) tg.Invoker {
-		return tg.InvokerFunc(func(ctx context.Context, input tg.TLObject, decode func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+		return tg.InvokerFunc(func(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 			if err := m.lim.Wait(ctx); err != nil {
 				return nil, err
 			}

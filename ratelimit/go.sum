@@ -1,4 +1,6 @@
-github.com/mtgo-labs/mtgo v0.1.0 h1:PQIUTAy7brJDyezjzEy9cBA+YcHFA5tQhD5SckZisaM=
-github.com/mtgo-labs/mtgo v0.1.0/go.mod h1:6yhhHVjBH6M6lKvHAoAIK1fSKBf0wZjsspv0jePpOnY=
+github.com/klauspost/compress v1.18.6 h1:2jupLlAwFm95+YDR+NwD2MEfFO9d4z4Prjl1XXDjuao=
+github.com/klauspost/compress v1.18.6/go.mod h1:cwPg85FWrGar70rWktvGQj8/hthj3wpl0PGDogxkrSQ=
+github.com/mtgo-labs/mtgo v0.7.0 h1:Vg4/Hmj4CqIZI9c5a6VTBacHIf2iDrQHczpoo7Zotpg=
+github.com/mtgo-labs/mtgo v0.7.0/go.mod h1:S7NWS71niPpXfDJiH9HsPM5ST3wcKusdeJCv6tveVR8=
 golang.org/x/time v0.15.0 h1:bbrp8t3bGUeFOx08pvsMYRTCVSMk89u4tKbNOZbp88U=
 golang.org/x/time v0.15.0/go.mod h1:Y4YMaQmXwGQZoFaVFk4YpCt4FLQMYKZe9oeV/f4MSno=

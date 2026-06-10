@@ -2,7 +2,6 @@ package ratelimit_test
 
 import (
 	"context"
-	"io"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -14,11 +13,15 @@ import (
 )
 
 type mockInvoker struct {
-	fn func(context.Context, tg.TLObject, func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error)
+	fn func(context.Context, tg.TLObject, func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error)
 }
 
-func (m *mockInvoker) RPCInvoke(ctx context.Context, input tg.TLObject, decode func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+func (m *mockInvoker) RPCInvoke(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 	return m.fn(ctx, input, decode)
+}
+
+func (m *mockInvoker) RPCInvokeRaw(_ context.Context, _ tg.TLObject) ([]byte, error) {
+	return nil, nil
 }
 
 func TestNew(t *testing.T) {
@@ -37,7 +40,7 @@ func TestLimiter(t *testing.T) {
 
 func TestPassthrough(t *testing.T) {
 	var called int32
-	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 		atomic.AddInt32(&called, 1)
 		return nil, nil
 	}}
@@ -56,7 +59,7 @@ func TestPassthrough(t *testing.T) {
 
 func TestRateLimiting(t *testing.T) {
 	mw := ratelimit.New(rate.Limit(1), 1)
-	invoker := mw.Middleware()(&mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	invoker := mw.Middleware()(&mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 		return nil, nil
 	}})
 
@@ -71,7 +74,7 @@ func TestRateLimiting(t *testing.T) {
 
 func TestContextCancellation(t *testing.T) {
 	mw := ratelimit.New(rate.Limit(0.1), 1)
-	invoker := mw.Middleware()(&mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	invoker := mw.Middleware()(&mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 		return nil, nil
 	}})
 
@@ -90,7 +93,7 @@ func TestContextCancellation(t *testing.T) {
 
 func TestConcurrent(t *testing.T) {
 	mw := ratelimit.New(rate.Limit(50), 10)
-	invoker := mw.Middleware()(&mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	invoker := mw.Middleware()(&mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 		return nil, nil
 	}})
 

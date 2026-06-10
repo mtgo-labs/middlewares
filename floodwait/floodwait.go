@@ -16,7 +16,6 @@ package floodwait
 
 import (
 	"context"
-	"io"
 	"sync"
 	"time"
 
@@ -78,7 +77,7 @@ func (m *Middleware) WithMaxRetries(n int) *Middleware {
 // Middleware returns a tg.InvokerMiddleware for UseInvokerMiddleware.
 func (m *Middleware) Middleware() func(next tg.Invoker) tg.Invoker {
 	return func(next tg.Invoker) tg.Invoker {
-		return tg.InvokerFunc(func(ctx context.Context, input tg.TLObject, decode func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+		return tg.InvokerFunc(func(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 			var retries int
 			for {
 				result, err := next.RPCInvoke(ctx, input, decode)

@@ -3,7 +3,6 @@ package floodwait_test
 import (
 	"context"
 	"errors"
-	"io"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,11 +13,15 @@ import (
 )
 
 type mockInvoker struct {
-	fn func(context.Context, tg.TLObject, func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error)
+	fn func(context.Context, tg.TLObject, func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error)
 }
 
-func (m *mockInvoker) RPCInvoke(ctx context.Context, input tg.TLObject, decode func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+func (m *mockInvoker) RPCInvoke(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 	return m.fn(ctx, input, decode)
+}
+
+func (m *mockInvoker) RPCInvokeRaw(_ context.Context, _ tg.TLObject) ([]byte, error) {
+	return nil, nil
 }
 
 func TestNew(t *testing.T) {
@@ -30,7 +33,7 @@ func TestNew(t *testing.T) {
 
 func TestPassthrough(t *testing.T) {
 	var called int32
-	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 		atomic.AddInt32(&called, 1)
 		return nil, nil
 	}}
@@ -47,7 +50,7 @@ func TestPassthrough(t *testing.T) {
 
 func TestNonFloodError(t *testing.T) {
 	expectedErr := errors.New("some error")
-	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 		return nil, expectedErr
 	}}
 
@@ -60,7 +63,7 @@ func TestNonFloodError(t *testing.T) {
 
 func TestRetriesOnFloodWait(t *testing.T) {
 	var attempts int32
-	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 		n := atomic.AddInt32(&attempts, 1)
 		if n == 1 {
 			return nil, tgerr.New(420, "FLOOD_WAIT_1")
@@ -93,7 +96,7 @@ func TestCallback(t *testing.T) {
 		received = d
 	})
 
-	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 		n := atomic.AddInt32(&attempts, 1)
 		if n == 1 {
 			return nil, tgerr.New(420, "FLOOD_WAIT_1")
@@ -111,7 +114,7 @@ func TestCallback(t *testing.T) {
 
 func TestMaxRetriesExceeded(t *testing.T) {
 	var attempts int32
-	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 		atomic.AddInt32(&attempts, 1)
 		return nil, tgerr.New(420, "FLOOD_WAIT_1")
 	}}
@@ -129,7 +132,7 @@ func TestMaxRetriesExceeded(t *testing.T) {
 
 func TestMaxWaitExceeded(t *testing.T) {
 	var called int32
-	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 		atomic.AddInt32(&called, 1)
 		return nil, tgerr.New(420, "FLOOD_WAIT_60")
 	}}
@@ -147,7 +150,7 @@ func TestMaxWaitExceeded(t *testing.T) {
 
 func TestContextCancellation(t *testing.T) {
 	var attempts int32
-	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 		atomic.AddInt32(&attempts, 1)
 		return nil, tgerr.New(420, "FLOOD_WAIT_30")
 	}}
@@ -164,7 +167,7 @@ func TestContextCancellation(t *testing.T) {
 
 func TestMultipleFloodWaits(t *testing.T) {
 	var attempts int32
-	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(io.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	base := &mockInvoker{fn: func(_ context.Context, _ tg.TLObject, _ func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 		n := atomic.AddInt32(&attempts, 1)
 		if n <= 2 {
 			return nil, tgerr.New(420, "FLOOD_WAIT_1")
