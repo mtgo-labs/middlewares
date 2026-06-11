@@ -32,9 +32,9 @@ type Callback func(duration time.Duration)
 // All RPC calls through the client are automatically protected — no handler
 // changes required.
 type Middleware struct {
-	mu        sync.Mutex
-	callback  Callback
-	maxWait   time.Duration
+	mu         sync.Mutex
+	callback   Callback
+	maxWait    time.Duration
 	maxRetries int
 }
 
@@ -77,51 +77,73 @@ func (m *Middleware) WithMaxRetries(n int) *Middleware {
 // Middleware returns a tg.InvokerMiddleware for UseInvokerMiddleware.
 func (m *Middleware) Middleware() func(next tg.Invoker) tg.Invoker {
 	return func(next tg.Invoker) tg.Invoker {
-		return tg.InvokerFunc(func(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
-			var retries int
-			for {
-				result, err := next.RPCInvoke(ctx, input, decode)
-				if err == nil {
-					return result, nil
-				}
+		return &invoker{middleware: m, next: next}
+	}
+}
 
-				d, ok := tgerr.AsFloodWait(err)
-				if !ok {
-					return result, err
-				}
+type invoker struct {
+	middleware *Middleware
+	next       tg.Invoker
+}
 
-				retries++
-				m.mu.Lock()
-				maxR := m.maxRetries
-				maxW := m.maxWait
-				cb := m.callback
-				m.mu.Unlock()
+func (i *invoker) RPCInvoke(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	var retries int
+	for {
+		result, err := i.next.RPCInvoke(ctx, input, decode)
+		if err == nil {
+			return result, nil
+		}
+		if waitErr := i.middleware.wait(ctx, err, &retries); waitErr != nil {
+			return result, waitErr
+		}
+	}
+}
 
-				if maxR > 0 && retries > maxR {
-					return result, err
-				}
+func (i *invoker) RPCInvokeRaw(ctx context.Context, input tg.TLObject) ([]byte, error) {
+	var retries int
+	for {
+		result, err := i.next.RPCInvokeRaw(ctx, input)
+		if err == nil {
+			return result, nil
+		}
+		if waitErr := i.middleware.wait(ctx, err, &retries); waitErr != nil {
+			return result, waitErr
+		}
+	}
+}
 
-				if d < time.Second {
-					d = time.Second
-				}
-				if maxW > 0 && d > maxW {
-					return result, err
-				}
+func (m *Middleware) wait(ctx context.Context, err error, retries *int) error {
+	d, ok := tgerr.AsFloodWait(err)
+	if !ok {
+		return err
+	}
 
-				if cb != nil {
-					cb(d)
-				}
+	*retries++
+	m.mu.Lock()
+	maxR := m.maxRetries
+	maxW := m.maxWait
+	cb := m.callback
+	m.mu.Unlock()
 
-				// Wait with 1s buffer (matches tgerr.FloodWait convention).
-				timer := time.NewTimer(d + time.Second)
-				select {
-				case <-timer.C:
-					// Retry.
-				case <-ctx.Done():
-					timer.Stop()
-					return nil, ctx.Err()
-				}
-			}
-		})
+	if maxR > 0 && *retries > maxR {
+		return err
+	}
+	if d < time.Second {
+		d = time.Second
+	}
+	if maxW > 0 && d > maxW {
+		return err
+	}
+	if cb != nil {
+		cb(d)
+	}
+
+	timer := time.NewTimer(d + time.Second)
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		timer.Stop()
+		return ctx.Err()
 	}
 }
