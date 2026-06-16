@@ -13,8 +13,8 @@ package ratelimit
 import (
 	"context"
 
-	"golang.org/x/time/rate"
 	"github.com/mtgo-labs/mtgo/tg"
+	"golang.org/x/time/rate"
 )
 
 // Middleware rate-limits RPC calls using a token-bucket limiter.
@@ -45,11 +45,30 @@ func (m *Middleware) Limiter() *rate.Limiter {
 // Middleware returns a tg.InvokerMiddleware function for UseInvokerMiddleware.
 func (m *Middleware) Middleware() func(next tg.Invoker) tg.Invoker {
 	return func(next tg.Invoker) tg.Invoker {
-		return tg.InvokerFunc(func(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
-			if err := m.lim.Wait(ctx); err != nil {
-				return nil, err
-			}
-			return next.RPCInvoke(ctx, input, decode)
-		})
+		return &wrappedInvoker{
+			next: next,
+			fn: func(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+				if err := m.lim.Wait(ctx); err != nil {
+					return nil, err
+				}
+				return next.RPCInvoke(ctx, input, decode)
+			},
+		}
 	}
+}
+
+// wrappedInvoker implements tg.Invoker by intercepting RPCInvoke and
+// forwarding RPCInvokeRaw transparently to the next invoker. This avoids
+// the limitation of tg.InvokerFunc, which returns an error for raw calls.
+type wrappedInvoker struct {
+	next tg.Invoker
+	fn   func(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error)
+}
+
+func (w *wrappedInvoker) RPCInvoke(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	return w.fn(ctx, input, decode)
+}
+
+func (w *wrappedInvoker) RPCInvokeRaw(ctx context.Context, input tg.TLObject) ([]byte, error) {
+	return w.next.RPCInvokeRaw(ctx, input)
 }

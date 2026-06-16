@@ -7,20 +7,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mtgo-labs/middlewares/floodwait"
 	"github.com/mtgo-labs/mtgo/tg"
 	"github.com/mtgo-labs/mtgo/tgerr"
-	"github.com/mtgo-labs/middlewares/floodwait"
 )
 
 type mockInvoker struct {
-	fn func(context.Context, tg.TLObject, func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error)
+	fn    func(context.Context, tg.TLObject, func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error)
+	rawFn func(context.Context, tg.TLObject) ([]byte, error)
 }
 
 func (m *mockInvoker) RPCInvoke(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
 	return m.fn(ctx, input, decode)
 }
 
-func (m *mockInvoker) RPCInvokeRaw(_ context.Context, _ tg.TLObject) ([]byte, error) {
+func (m *mockInvoker) RPCInvokeRaw(ctx context.Context, input tg.TLObject) ([]byte, error) {
+	if m.rawFn != nil {
+		return m.rawFn(ctx, input)
+	}
 	return nil, nil
 }
 
@@ -183,5 +187,31 @@ func TestMultipleFloodWaits(t *testing.T) {
 	}
 	if atomic.LoadInt32(&attempts) != 3 {
 		t.Errorf("expected 3 attempts, got %d", atomic.LoadInt32(&attempts))
+	}
+}
+
+func TestRPCInvokeRawPassthrough(t *testing.T) {
+	var rawCalled int32
+	base := &mockInvoker{
+		fn: func(_ context.Context, _ tg.TLObject, _ func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+			t.Fatal("RPCInvoke should not be called")
+			return nil, nil
+		},
+		rawFn: func(_ context.Context, _ tg.TLObject) ([]byte, error) {
+			atomic.AddInt32(&rawCalled, 1)
+			return []byte("raw"), nil
+		},
+	}
+
+	invoker := floodwait.New().Middleware()(base)
+	data, err := invoker.RPCInvokeRaw(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if string(data) != "raw" {
+		t.Errorf("expected raw passthrough data, got: %q", data)
+	}
+	if atomic.LoadInt32(&rawCalled) != 1 {
+		t.Errorf("expected raw to be called once, got %d", rawCalled)
 	}
 }

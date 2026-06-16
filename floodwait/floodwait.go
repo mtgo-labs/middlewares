@@ -32,9 +32,9 @@ type Callback func(duration time.Duration)
 // All RPC calls through the client are automatically protected — no handler
 // changes required.
 type Middleware struct {
-	mu        sync.Mutex
-	callback  Callback
-	maxWait   time.Duration
+	mu         sync.Mutex
+	callback   Callback
+	maxWait    time.Duration
 	maxRetries int
 }
 
@@ -77,51 +77,70 @@ func (m *Middleware) WithMaxRetries(n int) *Middleware {
 // Middleware returns a tg.InvokerMiddleware for UseInvokerMiddleware.
 func (m *Middleware) Middleware() func(next tg.Invoker) tg.Invoker {
 	return func(next tg.Invoker) tg.Invoker {
-		return tg.InvokerFunc(func(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
-			var retries int
-			for {
-				result, err := next.RPCInvoke(ctx, input, decode)
-				if err == nil {
-					return result, nil
-				}
+		return &wrappedInvoker{
+			next: next,
+			fn: func(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+				var retries int
+				for {
+					result, err := next.RPCInvoke(ctx, input, decode)
+					if err == nil {
+						return result, nil
+					}
 
-				d, ok := tgerr.AsFloodWait(err)
-				if !ok {
-					return result, err
-				}
+					d, ok := tgerr.AsFloodWait(err)
+					if !ok {
+						return result, err
+					}
 
-				retries++
-				m.mu.Lock()
-				maxR := m.maxRetries
-				maxW := m.maxWait
-				cb := m.callback
-				m.mu.Unlock()
+					retries++
+					m.mu.Lock()
+					maxR := m.maxRetries
+					maxW := m.maxWait
+					cb := m.callback
+					m.mu.Unlock()
 
-				if maxR > 0 && retries > maxR {
-					return result, err
-				}
+					if maxR > 0 && retries > maxR {
+						return result, err
+					}
 
-				if d < time.Second {
-					d = time.Second
-				}
-				if maxW > 0 && d > maxW {
-					return result, err
-				}
+					if d < time.Second {
+						d = time.Second
+					}
+					if maxW > 0 && d > maxW {
+						return result, err
+					}
 
-				if cb != nil {
-					cb(d)
-				}
+					if cb != nil {
+						cb(d)
+					}
 
-				// Wait with 1s buffer (matches tgerr.FloodWait convention).
-				timer := time.NewTimer(d + time.Second)
-				select {
-				case <-timer.C:
-					// Retry.
-				case <-ctx.Done():
-					timer.Stop()
-					return nil, ctx.Err()
+					// Wait with 1s buffer (matches tgerr.FloodWait convention).
+					timer := time.NewTimer(d + time.Second)
+					select {
+					case <-timer.C:
+						// Retry.
+					case <-ctx.Done():
+						timer.Stop()
+						return nil, ctx.Err()
+					}
 				}
-			}
-		})
+			},
+		}
 	}
+}
+
+// wrappedInvoker implements tg.Invoker by intercepting RPCInvoke and
+// forwarding RPCInvokeRaw transparently to the next invoker. This avoids
+// the limitation of tg.InvokerFunc, which returns an error for raw calls.
+type wrappedInvoker struct {
+	next tg.Invoker
+	fn   func(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error)
+}
+
+func (w *wrappedInvoker) RPCInvoke(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	return w.fn(ctx, input, decode)
+}
+
+func (w *wrappedInvoker) RPCInvokeRaw(ctx context.Context, input tg.TLObject) ([]byte, error) {
+	return w.next.RPCInvokeRaw(ctx, input)
 }
