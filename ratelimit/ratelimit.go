@@ -45,30 +45,27 @@ func (m *Middleware) Limiter() *rate.Limiter {
 // Middleware returns a tg.InvokerMiddleware function for UseInvokerMiddleware.
 func (m *Middleware) Middleware() func(next tg.Invoker) tg.Invoker {
 	return func(next tg.Invoker) tg.Invoker {
-		return &wrappedInvoker{
-			next: next,
-			fn: func(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
-				if err := m.lim.Wait(ctx); err != nil {
-					return nil, err
-				}
-				return next.RPCInvoke(ctx, input, decode)
-			},
-		}
+		return &invoker{lim: m.lim, next: next}
 	}
 }
 
-// wrappedInvoker implements tg.Invoker by intercepting RPCInvoke and
-// forwarding RPCInvokeRaw transparently to the next invoker. This avoids
-// the limitation of tg.InvokerFunc, which returns an error for raw calls.
-type wrappedInvoker struct {
+// invoker implements tg.Invoker, applying rate limiting to both decoded
+// (RPCInvoke) and raw (RPCInvokeRaw) RPC paths.
+type invoker struct {
+	lim  *rate.Limiter
 	next tg.Invoker
-	fn   func(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error)
 }
 
-func (w *wrappedInvoker) RPCInvoke(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
-	return w.fn(ctx, input, decode)
+func (i *invoker) RPCInvoke(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	if err := i.lim.Wait(ctx); err != nil {
+		return nil, err
+	}
+	return i.next.RPCInvoke(ctx, input, decode)
 }
 
-func (w *wrappedInvoker) RPCInvokeRaw(ctx context.Context, input tg.TLObject) ([]byte, error) {
-	return w.next.RPCInvokeRaw(ctx, input)
+func (i *invoker) RPCInvokeRaw(ctx context.Context, input tg.TLObject) ([]byte, error) {
+	if err := i.lim.Wait(ctx); err != nil {
+		return nil, err
+	}
+	return i.next.RPCInvokeRaw(ctx, input)
 }

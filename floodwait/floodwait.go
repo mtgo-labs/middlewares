@@ -77,70 +77,78 @@ func (m *Middleware) WithMaxRetries(n int) *Middleware {
 // Middleware returns a tg.InvokerMiddleware for UseInvokerMiddleware.
 func (m *Middleware) Middleware() func(next tg.Invoker) tg.Invoker {
 	return func(next tg.Invoker) tg.Invoker {
-		return &wrappedInvoker{
-			next: next,
-			fn: func(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
-				var retries int
-				for {
-					result, err := next.RPCInvoke(ctx, input, decode)
-					if err == nil {
-						return result, nil
-					}
+		return &invoker{middleware: m, next: next}
+	}
+}
 
-					d, ok := tgerr.AsFloodWait(err)
-					if !ok {
-						return result, err
-					}
+// invoker implements tg.Invoker, applying FLOOD_WAIT retry logic to both
+// decoded (RPCInvoke) and raw (RPCInvokeRaw) RPC paths.
+type invoker struct {
+	middleware *Middleware
+	next       tg.Invoker
+}
 
-					retries++
-					m.mu.Lock()
-					maxR := m.maxRetries
-					maxW := m.maxWait
-					cb := m.callback
-					m.mu.Unlock()
-
-					if maxR > 0 && retries > maxR {
-						return result, err
-					}
-
-					if d < time.Second {
-						d = time.Second
-					}
-					if maxW > 0 && d > maxW {
-						return result, err
-					}
-
-					if cb != nil {
-						cb(d)
-					}
-
-					// Wait with 1s buffer (matches tgerr.FloodWait convention).
-					timer := time.NewTimer(d + time.Second)
-					select {
-					case <-timer.C:
-						// Retry.
-					case <-ctx.Done():
-						timer.Stop()
-						return nil, ctx.Err()
-					}
-				}
-			},
+func (i *invoker) RPCInvoke(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
+	var retries int
+	for {
+		result, err := i.next.RPCInvoke(ctx, input, decode)
+		if err == nil {
+			return result, nil
+		}
+		if waitErr := i.middleware.wait(ctx, err, &retries); waitErr != nil {
+			return result, waitErr
 		}
 	}
 }
 
-// wrappedInvoker implements tg.Invoker by intercepting RPCInvoke and
-// forwarding RPCInvokeRaw transparently to the next invoker. This avoids
-// the limitation of tg.InvokerFunc, which returns an error for raw calls.
-type wrappedInvoker struct {
-	next tg.Invoker
-	fn   func(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error)
+func (i *invoker) RPCInvokeRaw(ctx context.Context, input tg.TLObject) ([]byte, error) {
+	var retries int
+	for {
+		result, err := i.next.RPCInvokeRaw(ctx, input)
+		if err == nil {
+			return result, nil
+		}
+		if waitErr := i.middleware.wait(ctx, err, &retries); waitErr != nil {
+			return result, waitErr
+		}
+	}
 }
 
-func (w *wrappedInvoker) RPCInvoke(ctx context.Context, input tg.TLObject, decode func(*tg.Reader) (tg.TLObject, error)) (tg.TLObject, error) {
-	return w.fn(ctx, input, decode)
-}
+// wait checks if err is a FLOOD_WAIT and, if so, sleeps for the required
+// duration. Returns nil to signal "retry", or a non-nil error to propagate.
+func (m *Middleware) wait(ctx context.Context, err error, retries *int) error {
+	d, ok := tgerr.AsFloodWait(err)
+	if !ok {
+		return err
+	}
 
-func (w *wrappedInvoker) RPCInvokeRaw(ctx context.Context, input tg.TLObject) ([]byte, error) {
-	return w.next.RPCInvokeRaw(ctx, input)
+	*retries++
+	m.mu.Lock()
+	maxR := m.maxRetries
+	maxW := m.maxWait
+	cb := m.callback
+	m.mu.Unlock()
+
+	if maxR > 0 && *retries > maxR {
+		return err
+	}
+	if d < time.Second {
+		d = time.Second
+	}
+	if maxW > 0 && d > maxW {
+		return err
+	}
+	if cb != nil {
+		cb(d)
+	}
+
+	// Wait with 1s buffer (matches tgerr.FloodWait convention).
+	timer := time.NewTimer(d + time.Second)
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		timer.Stop()
+		return ctx.Err()
+	}
 }
