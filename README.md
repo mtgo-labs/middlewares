@@ -7,6 +7,7 @@ Invoker middlewares for [mtgo](https://github.com/mtgo-labs/mtgo) — register o
 | Package | Description |
 |---------|-------------|
 | [floodwait](./floodwait) | Automatically retries RPC calls on `FLOOD_WAIT` errors |
+| [metrics](./metrics) | Collects RPC-level metrics (requests, latency, flood waits, timeouts) |
 | [ratelimit](./ratelimit) | Token-bucket rate limiter to prevent hitting Telegram API limits |
 
 ## Quick start
@@ -15,6 +16,7 @@ Each middleware is a separate Go module. Install only what you need:
 
 ```bash
 go get github.com/mtgo-labs/middlewares/floodwait
+go get github.com/mtgo-labs/middlewares/metrics
 go get github.com/mtgo-labs/middlewares/ratelimit
 ```
 
@@ -24,12 +26,14 @@ Register with an mtgo client:
 import (
     tg "github.com/mtgo-labs/mtgo/telegram"
     "github.com/mtgo-labs/middlewares/floodwait"
+    "github.com/mtgo-labs/middlewares/metrics"
     "github.com/mtgo-labs/middlewares/ratelimit"
     "golang.org/x/time/rate"
 )
 
 client, _ := tg.NewClient(apiID, apiHash, &tg.Config{BotToken: botToken})
 
+client.UseInvokerMiddleware(metrics.New(metrics.NewMemoryCollector(), metrics.Config{EnableMethodLabels: true}).Middleware())
 client.UseInvokerMiddleware(floodwait.New().Middleware())
 client.UseInvokerMiddleware(ratelimit.New(30, 10).Middleware())
 
