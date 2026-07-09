@@ -190,7 +190,7 @@ func TestInFlightDuringCall(t *testing.T) {
 	inv := mw.Middleware()(base)
 	input := &mockTLObject{id: tg.HelpGetConfigTypeID}
 
-	go inv.RPCInvoke(context.Background(), input, nil)
+	go func() { _, _ = inv.RPCInvoke(context.Background(), input, nil) }()
 	<-blocking
 
 	if got := atomic.LoadInt64(&observed); got != 1 {
@@ -213,7 +213,7 @@ func TestConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			inv.RPCInvoke(context.Background(), input, nil)
+			_, _ = inv.RPCInvoke(context.Background(), input, nil)
 		}()
 	}
 	wg.Wait()
@@ -258,7 +258,7 @@ func TestMethodLabelDisabled(t *testing.T) {
 	inv := mw.Middleware()(successInvoker())
 	input := &mockTLObject{id: tg.HelpGetConfigTypeID}
 
-	inv.RPCInvoke(context.Background(), input, nil)
+	_, _ = inv.RPCInvoke(context.Background(), input, nil)
 
 	if got := mc.Requests("help.getConfig", metrics.StatusSuccess); got != 0 {
 		t.Errorf("requests[help.getConfig] = %d, want 0 (labels disabled)", got)
@@ -274,7 +274,7 @@ func TestMethodName(t *testing.T) {
 	inv := mw.Middleware()(successInvoker())
 	input := &mockTLObject{id: tg.HelpGetConfigTypeID}
 
-	inv.RPCInvoke(context.Background(), input, nil)
+	_, _ = inv.RPCInvoke(context.Background(), input, nil)
 
 	if got := mc.Requests("help.getConfig", metrics.StatusSuccess); got != 1 {
 		t.Errorf("method name should resolve to 'help.getConfig', got %d", got)
@@ -339,4 +339,3 @@ func TestPrometheusCollector(t *testing.T) {
 		}
 	}
 }
-

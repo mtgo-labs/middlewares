@@ -109,7 +109,7 @@ func TestCallback(t *testing.T) {
 	}}
 
 	invoker := mw.Middleware()(base)
-	invoker.RPCInvoke(context.Background(), nil, nil)
+	_, _ = invoker.RPCInvoke(context.Background(), nil, nil)
 
 	if received != 1*time.Second {
 		t.Errorf("callback received %v, want 1s", received)

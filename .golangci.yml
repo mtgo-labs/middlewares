@@ -1,0 +1,17 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - staticcheck
+    - unused
+    - ineffassign
+  settings:
+    staticcheck:
+      checks:
+        - all
+
+formatters:
+  enable:
+    - gofmt

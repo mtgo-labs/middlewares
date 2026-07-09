@@ -68,8 +68,8 @@ func TestRateLimiting(t *testing.T) {
 	}})
 
 	start := time.Now()
-	invoker.RPCInvoke(context.Background(), nil, nil) // First call: immediate.
-	invoker.RPCInvoke(context.Background(), nil, nil) // Second call: waits ~1s.
+	_, _ = invoker.RPCInvoke(context.Background(), nil, nil) // First call: immediate.
+	_, _ = invoker.RPCInvoke(context.Background(), nil, nil) // Second call: waits ~1s.
 
 	if elapsed := time.Since(start); elapsed < 800*time.Millisecond {
 		t.Errorf("expected rate limiting delay, elapsed: %v", elapsed)
@@ -83,7 +83,7 @@ func TestContextCancellation(t *testing.T) {
 	}})
 
 	// Exhaust burst.
-	invoker.RPCInvoke(context.Background(), nil, nil)
+	_, _ = invoker.RPCInvoke(context.Background(), nil, nil)
 
 	// Cancelled context.
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
@@ -106,7 +106,7 @@ func TestConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			invoker.RPCInvoke(context.Background(), nil, nil)
+			_, _ = invoker.RPCInvoke(context.Background(), nil, nil)
 		}()
 	}
 	wg.Wait()

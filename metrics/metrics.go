@@ -65,13 +65,13 @@ type Collector interface {
 // NopCollector is a no-op Collector that discards all metrics.
 type NopCollector struct{}
 
-func (NopCollector) IncRequests(string, string)            {}
-func (NopCollector) ObserveLatency(string, time.Duration)   {}
-func (NopCollector) IncInFlight(string)                     {}
-func (NopCollector) DecInFlight(string)                     {}
-func (NopCollector) IncFloodWait(string)                    {}
-func (NopCollector) IncTimeout(string)                      {}
-func (NopCollector) IncRetry(string)                        {}
+func (NopCollector) IncRequests(string, string)           {}
+func (NopCollector) ObserveLatency(string, time.Duration) {}
+func (NopCollector) IncInFlight(string)                   {}
+func (NopCollector) DecInFlight(string)                   {}
+func (NopCollector) IncFloodWait(string)                  {}
+func (NopCollector) IncTimeout(string)                    {}
+func (NopCollector) IncRetry(string)                      {}
 
 // Config configures the metrics middleware.
 type Config struct {
