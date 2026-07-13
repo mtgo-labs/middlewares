@@ -3,7 +3,7 @@ module github.com/mtgo-labs/middlewares/metrics
 go 1.26.2
 
 require (
-	github.com/mtgo-labs/mtgo v0.14.0
+	github.com/mtgo-labs/mtgo v0.14.2
 	github.com/prometheus/client_golang v1.22.0
 )
 
