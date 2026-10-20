@@ -1,4 +1,4 @@
-github.com/klauspost/compress v1.20.1 h1:T7kKElXUMXrUJ2E9QhQhxFtcK5rPyLdsGZvdbLMPdiQ=
-github.com/klauspost/compress v1.20.1/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
-github.com/mtgo-labs/mtgo v0.22.0 h1:1C0d3ci6sEGeLHotYLxZxX8Jn4dOo+luw7uGOX/sj5Y=
-github.com/mtgo-labs/mtgo v0.22.0/go.mod h1:S++PI5I27DjGLWvngJyR4DG+8Ac9uH1QlKs9e1Qb3OA=
+github.com/klauspost/compress v1.20.3 h1:zWNoFqq/lSuYQRim3dUXlXeA0IqwuZGicdG5ZTfY5j4=
+github.com/klauspost/compress v1.20.3/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
+github.com/mtgo-labs/mtgo v0.23.0 h1:YwDzx6RhIyz3XUqZ9TbQ9Q4d+dBKFVzWrmE5hj/Kzw8=
+github.com/mtgo-labs/mtgo v0.23.0/go.mod h1:CkeeLsibFGPOpaZ27zYaLtmskpy6hYfGLfmEOzNwm64=
